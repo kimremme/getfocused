@@ -24,6 +24,14 @@ $form = [
     'guardian_phone' => '',
     'transport' => '',
 ];
+$allergyOptions = [
+    'gluten' => 'Gluten',
+    'lactose' => 'Laktose',
+    'milk_protein' => 'Melkeprotein',
+    'nuts' => 'Nøtter',
+    'vegetarian' => 'Vegetar',
+];
+$allergies = [];
 $success = isset($_SESSION['registration_success']) && !isset($_GET['new']);
 unset($_SESSION['registration_success']);
 
@@ -35,6 +43,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($form as $field => $value) {
         if (isset($_POST[$field]) && is_string($_POST[$field])) {
             $form[$field] = trim($_POST[$field]);
+        }
+    }
+    if (isset($_POST['allergies'])) {
+        if (is_array($_POST['allergies'])) {
+            foreach ($_POST['allergies'] as $allergy) {
+                if (is_string($allergy) && isset($allergyOptions[$allergy])) {
+                    $allergies[] = $allergy;
+                } else {
+                    $errors['allergies'] = 'Velg gyldige allergier eller kosthensyn.';
+                    break;
+                }
+            }
+            $allergies = array_values(array_unique($allergies));
+        } else {
+            $errors['allergies'] = 'Velg gyldige allergier eller kosthensyn.';
         }
     }
 
@@ -49,6 +72,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($form['name'] === '') {
         $errors['name'] = 'Skriv inn navnet på deltakeren.';
+    } elseif (preg_match('/\s/u', $form['name']) !== 1) {
+        $errors['name'] = 'Skriv inn både fornavn og etternavn.';
     } elseif (mb_strlen($form['name']) > 160) {
         $errors['name'] = 'Navnet kan ikke være lengre enn 160 tegn.';
     }
@@ -119,9 +144,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $statement = $pdo->prepare(
                 'INSERT INTO registrations
                     (participant_name, participant_email, participant_phone, birth_date, gender,
-                     guardian_name, guardian_phone, transport_preference)
+                     guardian_name, guardian_phone, transport_preference, allergies)
                  VALUES
-                    (:name, :email, :phone, :birth_date, :gender, :guardian_name, :guardian_phone, :transport)'
+                    (:name, :email, :phone, :birth_date, :gender, :guardian_name, :guardian_phone, :transport, :allergies)'
             );
             $statement->execute([
                 ':name' => $form['name'],
@@ -132,6 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':guardian_name' => $form['guardian_name'] !== '' ? $form['guardian_name'] : null,
                 ':guardian_phone' => $form['guardian_phone'] !== '' ? $form['guardian_phone'] : null,
                 ':transport' => $form['transport'] !== '' ? $form['transport'] : null,
+                ':allergies' => $allergies !== [] ? json_encode($allergies, JSON_THROW_ON_ERROR) : null,
             ]);
 
             $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -195,7 +221,7 @@ function respondJson(array $payload, int $status): void
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20261013-7">
     <script src="registration.js" defer></script>
 </head>
 <body>
@@ -254,23 +280,27 @@ function respondJson(array $payload, int $status): void
                     </div>
                     <div class="price-detail">
                         <span class="price-icon price-icon-outline" aria-hidden="true">↗</span>
-                        <p><strong>Du betaler selv</strong><br>Festivalpass</p>
+                        <p><strong>Du betaler selv</strong><br>Festivalpass: 750,-</p>
                     </div>
                 </article>
                 <article class="pricing-card pricing-young-adult">
                     <p class="pricing-type">UNG VOKSEN</p>
                     <h3>Ung voksen</h3>
-                    <div class="price-share" aria-label="50 prosent">
-                        <strong>50<span>%</span></strong>
-                        <span>av overnatting<br>og matpass</span>
+                    <div class="price-detail">
+                        <span class="price-icon price-icon-outline" aria-hidden="true">↗</span>
+                        <p><strong>Du betaler selv</strong><br>Festivalpass: 750,-</p>
                     </div>
                     <div class="price-detail">
                         <span class="price-icon" aria-hidden="true">+</span>
-                        <p><strong>Menigheten dekker</strong><br>Halvparten av overnatting og matpass</p>
+                        <p><strong>Menigheten dekker halvparten av</strong><br>Matpass: 599,-<br>Frokost: 210,-<br>Overnatting: 600–800,-</p>
+                    </div>
+                    <div class="price-detail">
+                        <span class="price-icon" aria-hidden="true">≈</span>
+                        <p><strong>Omtrentlig totalpris for deg</strong><br>Ca. 1 500 kr</p>
                     </div>
                 </article>
             </div>
-            <p class="pricing-footnote">Vi kommer snart med mer informasjon om de konkrete prisene.</p>
+            <p class="pricing-footnote">Overnattingsprisen avhenger av hvor mange som deler rom.</p>
         </section>
 
         <section class="registration" id="pamelding">
@@ -307,8 +337,8 @@ function respondJson(array $payload, int $status): void
 
                 <div class="form-grid">
                     <div class="field field-wide">
-                        <label for="name">Navn på deltaker <span>*</span></label>
-                        <input id="name" name="name" type="text" autocomplete="name" maxlength="160" required value="<?= escape($form['name']) ?>" aria-describedby="<?= isset($errors['name']) ? 'name-error' : '' ?>">
+                        <label for="name">Fullt navn på deltaker (fornavn og etternavn) <span>*</span></label>
+                        <input id="name" name="name" type="text" autocomplete="name" maxlength="160" pattern=".*\s+.*" title="Oppgi både fornavn og etternavn." required value="<?= escape($form['name']) ?>" aria-describedby="<?= isset($errors['name']) ? 'name-error' : '' ?>">
                         <?= isset($errors['name']) ? '<span class="field-error" id="name-error">' . escape($errors['name']) . '</span>' : '' ?>
                     </div>
 
@@ -339,16 +369,33 @@ function respondJson(array $payload, int $status): void
                         <?= fieldError($errors, 'gender') ?>
                     </fieldset>
 
+                    <fieldset class="field field-wide allergy-field">
+                        <legend>Allergier <span class="optional">· valgfritt</span></legend>
+                        <div class="allergy-options">
+                            <label class="choice allergy-select-all">
+                                <input id="select-allergies" type="checkbox">
+                                <span>Velg alle</span>
+                            </label>
+                            <?php foreach ($allergyOptions as $value => $label): ?>
+                                <label class="choice">
+                                    <input type="checkbox" name="allergies[]" value="<?= escape($value) ?>" <?= in_array($value, $allergies, true) ? 'checked' : '' ?> aria-describedby="<?= isset($errors['allergies']) ? 'allergies-error' : '' ?>">
+                                    <span><?= escape($label) ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                        <?= isset($errors['allergies']) ? '<span class="field-error" id="allergies-error">' . escape($errors['allergies']) . '</span>' : '' ?>
+                    </fieldset>
+
                     <div class="field field-wide field-divider">
-                        <p class="section-label">PÅRØRENDE</p>
+                        <p class="section-label">PÅRØRENDE/FORELDRE</p>
                     </div>
                     <div class="field">
-                        <label for="guardian_name">Navn på pårørende <span>*</span></label>
+                        <label for="guardian_name">Navn på pårørende/foreldre <span>*</span></label>
                         <input id="guardian_name" name="guardian_name" type="text" autocomplete="name" maxlength="160" required value="<?= escape($form['guardian_name']) ?>" aria-describedby="<?= isset($errors['guardian_name']) ? 'guardian-name-error' : '' ?>">
                         <?= isset($errors['guardian_name']) ? '<span class="field-error" id="guardian-name-error">' . escape($errors['guardian_name']) . '</span>' : '' ?>
                     </div>
                     <div class="field">
-                        <label for="guardian_phone">Telefon til pårørende <span>*</span></label>
+                        <label for="guardian_phone">Telefon til pårørende/foreldre <span>*</span></label>
                         <input id="guardian_phone" name="guardian_phone" type="tel" autocomplete="tel" maxlength="40" placeholder="+47" required value="<?= escape($form['guardian_phone']) ?>" aria-describedby="<?= isset($errors['guardian_phone']) ? 'guardian-phone-error' : '' ?>">
                         <?= isset($errors['guardian_phone']) ? '<span class="field-error" id="guardian-phone-error">' . escape($errors['guardian_phone']) . '</span>' : '' ?>
                     </div>
@@ -429,6 +476,10 @@ function respondJson(array $payload, int $status): void
         <div class="footer-links">
             <a href="https://www.getfocused.no/" target="_blank" rel="noopener noreferrer">getfocused.no ↗</a>
             <a href="https://pkmj.no/youth-night" target="_blank" rel="noopener noreferrer">Youth Night ↗</a>
+            <a class="footer-credit" href="https://onto.no" target="_blank" rel="noopener noreferrer">
+                <span>Design og utvikling av</span>
+                <img src="/_images/onto_logo_white.svg" alt="ONTO AS" width="78" height="20">
+            </a>
         </div>
     </footer>
 </body>

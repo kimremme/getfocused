@@ -3,6 +3,26 @@ const form = document.querySelector('#pamelding form');
 if (form) {
     const submitButton = form.querySelector('button[type="submit"]');
     const registrationHeading = document.querySelector('.registration-heading');
+    const allergyCheckboxes = [...form.querySelectorAll('[name="allergies[]"]')];
+    const selectAllergies = form.querySelector('#select-allergies');
+
+    function updateSelectAll() {
+        const selectedCount = allergyCheckboxes.filter((checkbox) => checkbox.checked).length;
+        selectAllergies.checked = selectedCount === allergyCheckboxes.length;
+        selectAllergies.indeterminate = selectedCount > 0 && selectedCount < allergyCheckboxes.length;
+    }
+
+    allergyCheckboxes.forEach((checkbox) => checkbox.addEventListener('change', updateSelectAll));
+    selectAllergies.addEventListener('change', () => {
+        allergyCheckboxes.forEach((checkbox) => {
+            checkbox.checked = selectAllergies.checked;
+        });
+        selectAllergies.indeterminate = false;
+    });
+    form.addEventListener('reset', () => {
+        requestAnimationFrame(updateSelectAll);
+    });
+    updateSelectAll();
 
     function createThankYouCard(message) {
         const card = document.createElement('div');
@@ -97,7 +117,7 @@ if (form) {
             return;
         }
 
-        const field = form.querySelector(`[name="${name}"]`);
+        const field = form.querySelector(`[name="${name}"], [name="${name}[]"]`);
         if (!field) {
             return;
         }
@@ -114,7 +134,7 @@ if (form) {
         error.textContent = message;
         container.append(error);
 
-        form.querySelectorAll(`[name="${name}"]`).forEach((control) => {
+        form.querySelectorAll(`[name="${name}"], [name="${name}[]"]`).forEach((control) => {
             control.setAttribute('aria-invalid', 'true');
             const describedBy = control.getAttribute('aria-describedby');
             const ids = describedBy ? describedBy.split(/\s+/) : [];

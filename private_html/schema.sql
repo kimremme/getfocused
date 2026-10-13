@@ -8,6 +8,7 @@ CREATE TABLE registrations (
     guardian_name VARCHAR(160) NULL,
     guardian_phone VARCHAR(40) NULL,
     transport_preference VARCHAR(30) NULL,
+    allergies TEXT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     INDEX idx_registrations_created_at (created_at)
